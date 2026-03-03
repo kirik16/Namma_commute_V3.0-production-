@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // ── Change this to your Railway URL once deployed ──────────────
-  static const String baseUrl = 'https://nammacommutev30-production-production.up.railway.app';
+  static const String baseUrl = 'https://nammacommutev30-production-production.up.railway.app/api/v1';
   // ───────────────────────────────────────────────────────────────
 
   static const Duration _timeout = Duration(seconds: 10);
