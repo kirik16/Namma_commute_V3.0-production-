@@ -1,0 +1,79 @@
+name: Build Namma Commute APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Find pubspec.yaml
+        id: find
+        run: |
+          PUBSPEC=$(find . -name "pubspec.yaml" | grep -v ".dart_tool" | head -1)
+          DIR=$(dirname "$PUBSPEC")
+          echo "Found project at: $DIR"
+          echo "dir=$DIR" >> $GITHUB_OUTPUT
+
+      - name: Write local.properties
+        run: |
+          DIR=${{ steps.find.outputs.dir }}
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > $DIR/android/local.properties
+          echo "flutter.sdk=$FLUTTER_ROOT"  >> $DIR/android/local.properties
+          echo "flutter.versionName=1.0.0"  >> $DIR/android/local.properties
+          echo "flutter.versionCode=1"      >> $DIR/android/local.properties
+
+      - name: Generate app icons
+        run: |
+          sudo apt-get install -y imagemagick -q
+          DIR=${{ steps.find.outputs.dir }}
+          RES=$DIR/android/app/src/main/res
+          for spec in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
+            NAME="${spec%%:*}"; SIZE="${spec##*:}"
+            mkdir -p $RES/mipmap-$NAME
+            convert -size ${SIZE}x${SIZE} xc:#E8581C \
+              -fill white -gravity center -font DejaVu-Sans-Bold \
+              -pointsize $((SIZE/3)) -annotate 0 "NC" \
+              $RES/mipmap-$NAME/ic_launcher.png
+            cp $RES/mipmap-$NAME/ic_launcher.png \
+               $RES/mipmap-$NAME/ic_launcher_round.png
+          done
+          echo "Icons generated"
+
+      - name: Flutter pub get
+        run: |
+          cd ${{ steps.find.outputs.dir }}
+          flutter pub get
+
+      - name: Build release APK
+        run: |
+          cd ${{ steps.find.outputs.dir }}
+          flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NammaCommute-APK
+          path: ${{ steps.find.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Print APK size
+        run: |
+          DIR=${{ steps.find.outputs.dir }}
+          APK="$DIR/build/app/outputs/flutter-apk/app-release.apk"
+          [ -f "$APK" ] && echo "✅ APK ready: $(du -sh $APK | cut -f1)" || echo "❌ APK not found"
